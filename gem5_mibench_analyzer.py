@@ -68,13 +68,19 @@ def getstatichex():
 	with open(binFile, "rb") as f:
 		binData = f.read()
 	
+	nwords = 1000000
+
+	assert len(binData) < 4*nwords
+	assert len(binData) % 4 == 0
+
 	hexFileName = gem5outdir + exec + "_static.hex"
 	hexFile = open(hexFileName, 'w')
 
-	while (i < len(binData) // 4):
-		w = binData[4*i : 4*i+4]
-		hexFile.write("%02x%02x%02x%02x" % (w[3], w[2], w[1], w[0]))
-		hexFile.write("\n")
+	for i in range(nwords):
+		if i < len(binData) // 4:
+			w = binData[4*i : 4*i+4]
+			hexFile.write("%02x%02x%02x%02x" % (w[3], w[2], w[1], w[0]))
+			hexFile.write("\n")
 	
 	hexFile.close()
 
@@ -316,7 +322,7 @@ for i in range(0, len(gem5outdirlist) - 1):
 		execoptions = " --options='" + execoptionlist[i] + "' "
 	else: 
 		execoptions = ""
-	gem5cmd = gem5buildoptpath + " " + "--outdir=" + gem5outdir + gem5optoptions + " " + gem5configpath + " -c " + execcmd + execoptions + " " + gem5confoptions + otherconfoptions
+	gem5cmd = gem5buildoptpath + " " + "--outdir=" + gem5outdir + gem5optoptions + " " + gem5configpath + " -c " + execcmd + execoptions + " " + gem5confoptions + otherconfoptions + " > " + gem5outdir + "cmd_output.txt"
 
 	print(gem5cmd)
 	result = subprocess.getoutput(gem5cmd)
@@ -326,10 +332,9 @@ for i in range(0, len(gem5outdirlist) - 1):
 
 		decodeinstdatatraces()
 
-		# statikleri kapatıyorum 10GBden fazla hex codeu mu olur :(
-		#getstatichex()
+		getstatichex()
 
-		#getstaticdis()
+		getstaticdis()
 	except: 
 		pass
 

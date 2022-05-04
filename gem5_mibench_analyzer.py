@@ -82,6 +82,7 @@ def getstatichex():
 			hexFile.write("%02x%02x%02x%02x" % (w[3], w[2], w[1], w[0]))
 			hexFile.write("\n")
 	
+	binFile.close()
 	hexFile.close()
 
 # bu fonka yuzdelik random secimler eklenebilir ve onlar ayri memtrace.txtler olarak basilabilir.
@@ -322,10 +323,13 @@ for i in range(0, len(gem5outdirlist) - 1):
 		execoptions = " --options='" + execoptionlist[i] + "' "
 	else: 
 		execoptions = ""
-	gem5cmd = gem5buildoptpath + " " + "--outdir=" + gem5outdir + gem5optoptions + " " + gem5configpath + " -c " + execcmd + execoptions + " " + gem5confoptions + otherconfoptions + " > " + gem5outdir + "/cmd_output.txt"
+	gem5cmd = gem5buildoptpath + " " + "--outdir=" + gem5outdir + gem5optoptions + " " + gem5configpath + " -c " + execcmd + execoptions + " " + gem5confoptions + otherconfoptions
 
 	print(gem5cmd)
 	result = subprocess.getoutput(gem5cmd)
+	outFile = open(gem5outdir + "/cmd_output.txt", 'w')
+	outFile.write(result)
+	outFile.close()
 	print(result)
 	try:
 		getmemtrace()

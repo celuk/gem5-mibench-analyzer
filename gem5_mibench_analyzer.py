@@ -13,10 +13,10 @@ execpath = "/Users/shc/mibenchriscv/"
 execcmd = execpath + exec
 
 execoptions = "" # " --options='/Users/shc/mibenchriscv/input_large.dat' " # exec pathin bi eksigi + large.dat
-gem5confoptions = "--data-trace-file=datatrace.gz --inst-trace-file=insttrace.gz"
+gem5confoptions = "" #"--data-trace-file=datatrace.gz --inst-trace-file=insttrace.gz"
 
 # default cpu type cachesiz atomicsimplecpu
-otherconfoptions = "" # " --maxinsts=1000000 --cpu-type=DerivO3CPU --bp-type=BiModeBP --mem-type=DDR4_2400_16x4 --mem-size=4GB --caches --l1i_size=4kB --l1i_assoc=8 --l1d_size=4kB --l1d_assoc=8 --l2cache --l2_size=128kB --l2_assoc=4 "
+otherconfoptions = " --maxinsts=1000000 " # " --maxinsts=1000000 --cpu-type=DerivO3CPU --bp-type=BiModeBP --mem-type=DDR4_2400_16x4 --mem-size=4GB --caches --l1i_size=4kB --l1i_assoc=8 --l1d_size=4kB --l1d_assoc=8 --l2cache --l2_size=128kB --l2_assoc=4 "
 
 gem5cmd = gem5buildoptpath + " " + "--outdir=" + gem5outdir + exec + gem5optoptions + " " + gem5configpath + " -c " + execcmd + execoptions + " " + gem5confoptions + otherconfoptions
 
@@ -53,7 +53,7 @@ def getstaticdis():
 	objdiscmd = riscvobjdis + execcmd + " > " + disFile
 	print(objdiscmd)
 	result = subprocess.getoutput(objdiscmd)
-	print(result)
+	#print(result)
 
 def getstatichex():
 	global exec
@@ -63,26 +63,26 @@ def getstatichex():
 	objcpcmd = riscvobjcpbin + execcmd + " " + binFile
 	print(objcpcmd)
 	result = subprocess.getoutput(objcpcmd)
-	print(result)
+	#print(result)
 
 	with open(binFile, "rb") as f:
 		binData = f.read()
 	
-	nwords = 1000000
+	maxlimit = 1000000
 
-	assert len(binData) < 4*nwords
+	assert len(binData) < 4*maxlimit
 	assert len(binData) % 4 == 0
 
 	hexFileName = gem5outdir + exec + "_static.hex"
 	hexFile = open(hexFileName, 'w')
 
-	for i in range(nwords):
+	for i in range(maxlimit):
 		if i < len(binData) // 4:
 			w = binData[4*i : 4*i+4]
 			hexFile.write("%02x%02x%02x%02x" % (w[3], w[2], w[1], w[0]))
 			hexFile.write("\n")
 	
-	binFile.close()
+	f.close()
 	hexFile.close()
 
 # bu fonka yuzdelik random secimler eklenebilir ve onlar ayri memtrace.txtler olarak basilabilir.
@@ -326,15 +326,20 @@ for i in range(0, len(gem5outdirlist) - 1):
 	gem5cmd = gem5buildoptpath + " " + "--outdir=" + gem5outdir + gem5optoptions + " " + gem5configpath + " -c " + execcmd + execoptions + " " + gem5confoptions + otherconfoptions
 
 	print(gem5cmd)
+
+	#subprocess.call(gem5cmd, shell=True)
+	#print("")
+
 	result = subprocess.getoutput(gem5cmd)
 	outFile = open(gem5outdir + "/cmd_output.txt", 'w')
 	outFile.write(result)
 	outFile.close()
-	print(result)
+	#print(result)
+
 	try:
 		getmemtrace()
 
-		decodeinstdatatraces()
+		#decodeinstdatatraces()
 
 		getstatichex()
 
@@ -342,4 +347,4 @@ for i in range(0, len(gem5outdirlist) - 1):
 	except: 
 		pass
 
-	print("")
+	print("\n")

@@ -79,7 +79,7 @@ def getstatichex():
 	hexFile.close()
 
 # bu fonka yuzdelik random secimler eklenebilir ve onlar ayri memtrace.txtler olarak basilabilir.
-# su an %100
+# su an %100 tum buyruklar icin Vler var
 def getmemtrace():
 	traceFileName = gem5outdir + "/exectrace.txt"
 	traceFile = open(traceFileName, 'r')

@@ -1,15 +1,25 @@
 import os
 import subprocess
 import re
+import random
 
-gem5path = "/Users/shc/gem5"
+########## DEGISTIRILMESI GEREKEN DEGISKENLER
+
+gem5path = "/Users/shc/gem5" # gem5 dosyasi yolu
+mibenchpath = "/Users/shc/mibenchriscv" # riscv icin derlenmis hazir halde mibench benchmarklarinin bulundugu ana dosya
+riscvtoolpath = "/usr/local/Cellar/riscv-gnu-toolchain/main/bin/" # riscv-gnu-toolchain build(install) bin pathi
+pyexec = "python3" # python ya da python3
+gem5outdir = "/Users/shc/gem5/m5out/" # ciktilarin yazilacagi dosya
+
+########## DEGISTIRILMESI GEREKEN DEGISKENLERIN SONU
+
 gem5buildoptpath = gem5path + "/build/RISCV/gem5.opt"
 
 exec = "hello"
-gem5outdir = "/Users/shc/gem5/m5out/"
+
 gem5optoptions = " --debug-flags=Exec,Decode --debug-file=exectrace.txt"
 gem5configpath = gem5path + "/configs/example/se.py"
-execpath = "/Users/shc/mibenchriscv/"
+execpath = mibenchpath + "/" #"/Users/shc/mibenchriscv/"
 execcmd = execpath + exec
 
 execoptions = "" # " --options='/Users/shc/mibenchriscv/input_large.dat' " # exec pathin bi eksigi + large.dat
@@ -20,10 +30,10 @@ otherconfoptions = " --maxinsts=1000000 " # " --maxinsts=1000000 --cpu-type=Deri
 
 gem5cmd = gem5buildoptpath + " " + "--outdir=" + gem5outdir + exec + gem5optoptions + " " + gem5configpath + " -c " + execcmd + execoptions + " " + gem5confoptions + otherconfoptions
 
-mibenchpath = "/Users/shc/mibenchriscv"
+
 
 # riscv64-unknown-elf-objcopy -O binary dene.elf dene.bin
-riscvtoolpath = "/usr/local/Cellar/riscv-gnu-toolchain/main/bin/"
+
 riscvobjcp = riscvtoolpath + "riscv64-unknown-elf-objcopy"
 riscvobjcpbin = riscvobjcp + " -O binary " #+ exec + " " + exec + ".bin"
 
@@ -31,7 +41,7 @@ riscvobjdmp = riscvtoolpath + "riscv64-unknown-elf-objdump"
 riscvobjdis = riscvobjdmp + " -d "
 
 # python3 /Users/shc/gem5/util/decode_packet_trace.py system.cpu.traceListener.datatrace.gz outdatatrace.txt
-pyexec = "python3"
+
 decodepypath = " " + gem5path + "/util/decode_packet_trace.py "
 
 def decodeinstdatatraces():
@@ -142,6 +152,91 @@ def getmemtrace():
 	memTraceFile.close()
 	memTraceFileSys.close()
 
+def getmemtracepercent(percent):
+	traceFileName = gem5outdir + "/exectrace.txt"
+	traceFile = open(traceFileName, 'r')
+	traceLines = traceFile.readlines()
+
+	prevInstCount = 0 # iki mem opu arasinda ne kadar gecti
+
+	lineCount = 0
+	eachLine = ""
+
+	memTraceFileName = gem5outdir + "/memtrace" + percent.__str__() + ".txt"
+	memTraceFile = open(memTraceFileName, 'w')
+
+	memTraceFileNameSys = gem5outdir + "/memtrace_syscallsiz" + percent.__str__() + ".txt"
+	memTraceFileSys = open(memTraceFileNameSys, 'w')
+
+	divider = 100.0/percent
+
+	instcount = subprocess.getoutput("wc -l < " + gem5outdir + "/memtrace_syscallsiz.txt") # burasi degistirilebilir ama satir sayisi az olana gore alalim, hata olmasin.
+	instcount = int(float(instcount))
+
+	numofrandnums = int(float(instcount/divider))
+	randnumlist = random.sample(range(1, instcount), numofrandnums)
+	randnumlist.sort()
+
+	randlistindex = 0
+
+	contcount = 0 # surekli sayacak, randnumlistteki randnumlardan birine denk gelip gelmedigini kontrol icin, gelince index 1 artacak
+
+	isFirst = True # eger ilk yazilacak mem opu ise daha once mem opu olamayacağı icin previnstcount 0 olmali
+
+	for line in traceLines:
+		eachLine += line + ' '
+		lineCount += 1
+
+		if 'T0' in line:
+			contcount += 1
+
+			if lineCount == 5:
+				opr = re.search('(?:[^:]*:){15} (.+?):', eachLine).group(1).rstrip().lstrip()
+			else:
+				opr = re.search('(?:[^:]*:){13} (.+?):', eachLine).group(1).rstrip().lstrip()
+			addr = eachLine.partition("A=")[2].rstrip().lstrip()
+			inst = re.search('Decoding instruction (.*) at', eachLine).group(1).rstrip().lstrip()
+			pc = re.search('T0 : (.+?) @', eachLine).group(1).rstrip().lstrip()
+
+			if opr == 'MemRead':
+				if isFirst: 
+					prevInstCount = 0
+				isFirst = False
+
+				memTraceFile.write(prevInstCount.__str__() + ' ' + addr + ' R\n')
+				memTraceFileSys.write(prevInstCount.__str__() + ' ' + addr + ' R\n')
+				prevInstCount = 0
+			elif opr == 'MemWrite':
+				if isFirst: 
+					prevInstCount = 0
+				isFirst = False
+
+				memTraceFile.write(prevInstCount.__str__() + ' ' + addr + ' W\n')
+				memTraceFileSys.write(prevInstCount.__str__() + ' ' + addr + ' W\n')
+				prevInstCount = 0
+			
+			if contcount == randnumlist[randlistindex]:
+				if isFirst: 
+					prevInstCount = 0
+				isFirst = False
+				# burada sadece syscalsiz olanda ilk seferde syscall gelmisse isFirst sıkıntı olabilir, o da onemsiz sanki
+
+				# Vler arasi uzaklik | adres | veri | V
+				memTraceFile.write(prevInstCount.__str__() + ' ' + pc + ' ' + inst + ' V\n')
+				if opr != 'No_OpClass': # syscallari ele
+					memTraceFileSys.write(prevInstCount.__str__() + ' ' + pc + ' ' + inst + ' V\n')
+				prevInstCount = 0
+				randlistindex += 1
+			else:
+				prevInstCount = prevInstCount + 1
+
+			lineCount = 0
+			eachLine = ""
+
+	traceFile.close()
+	memTraceFile.close()
+	memTraceFileSys.close()
+
 pathlist = []
 
 for (path, dirs, files) in os.walk(mibenchpath):
@@ -162,167 +257,201 @@ execoptionlist = []
 
 for eachpath in pathlist:
 	if eachpath.endswith("qsort"):
-		gem5outdirlist.append(gem5outdir + "qsort/qsort_small")
+		gem5outdir2 = gem5outdir + "automotive/"
+		
+		gem5outdirlist.append(gem5outdir2 + "qsort/qsort_small")
 		execlist.append(eachpath + "/qsort_small")
 		execoptionlist.append(eachpath + "/input_small.dat")
 
-		gem5outdirlist.append(gem5outdir + "qsort/qsort_large")
+		gem5outdirlist.append(gem5outdir2 + "qsort/qsort_large")
 		execlist.append(eachpath + "/qsort_large")
 		execoptionlist.append(eachpath + "/input_large.dat")
+
+		# gem5outdir = gem5outdir[:-1].rsplit('/', 1)[0]
+
 	elif eachpath.endswith("jpeg-6a"):
+		gem5outdir2 = gem5outdir + "consumer/"
+		
 		upperdir = eachpath.rsplit('/', 1)[0]
 
-		gem5outdirlist.append(gem5outdir + "jpeg/jpeg_small/cjpeg_small")
+		gem5outdirlist.append(gem5outdir2 + "jpeg/jpeg_small/cjpeg_small")
 		execlist.append(eachpath + "/cjpeg")
 		execoptionlist.append("-dct int -progressive -opt -outfile " + gem5outdirlist[-1] + "/output_small_encode.jpeg " + upperdir + "/input_small.ppm")
 		
-		gem5outdirlist.append(gem5outdir + "jpeg/jpeg_small/djpeg_small")
+		gem5outdirlist.append(gem5outdir2 + "jpeg/jpeg_small/djpeg_small")
 		execlist.append(eachpath + "/djpeg")
 		execoptionlist.append("-dct int -ppm -outfile " + gem5outdirlist[-1] + "/output_small_decode.ppm " + upperdir + "/input_small.jpg")
 
-		gem5outdirlist.append(gem5outdir + "jpeg/jpeg_large/cjpeg_large")
+		gem5outdirlist.append(gem5outdir2 + "jpeg/jpeg_large/cjpeg_large")
 		execlist.append(eachpath + "/cjpeg")
 		execoptionlist.append("-dct int -progressive -opt -outfile " + gem5outdirlist[-1] + "/output_large_encode.jpeg " + upperdir + "/input_large.ppm")
 		
-		gem5outdirlist.append(gem5outdir + "jpeg/jpeg_large/djpeg_large")
+		gem5outdirlist.append(gem5outdir2 + "jpeg/jpeg_large/djpeg_large")
 		execlist.append(eachpath + "/djpeg")
 		execoptionlist.append("-dct int -ppm -outfile " + gem5outdirlist[-1] + "/output_large_decode.ppm " + upperdir + "/input_large.jpg")
 	elif eachpath.endswith("sha"):
-		gem5outdirlist.append(gem5outdir + "sha/sha_small")
+		gem5outdir2 = gem5outdir + "security/"
+		
+		gem5outdirlist.append(gem5outdir2 + "sha/sha_small")
 		execlist.append(eachpath + "/sha")
 		execoptionlist.append(eachpath + "/input_small.asc")
 
-		gem5outdirlist.append(gem5outdir + "sha/sha_large")
+		gem5outdirlist.append(gem5outdir2 + "sha/sha_large")
 		execlist.append(eachpath + "/sha")
 		execoptionlist.append(eachpath + "/input_large.asc")
 	elif eachpath.endswith("FFT"):
-		gem5outdirlist.append(gem5outdir + "FFT/FFT_small/fft_small")
+		gem5outdir2 = gem5outdir + "telecomm/"
+		
+		gem5outdirlist.append(gem5outdir2 + "FFT/FFT_small/fft_small")
 		execlist.append(eachpath + "/fft")
 		execoptionlist.append("4 4096")
 
-		gem5outdirlist.append(gem5outdir + "FFT/FFT_small/fft_small_inv")
+		gem5outdirlist.append(gem5outdir2 + "FFT/FFT_small/fft_small_inv")
 		execlist.append(eachpath + "/fft")
 		execoptionlist.append("4 8192 -i") # 8192?
 
-		gem5outdirlist.append(gem5outdir + "FFT/FFT_large/fft_large")
+		gem5outdirlist.append(gem5outdir2 + "FFT/FFT_large/fft_large")
 		execlist.append(eachpath + "/fft")
 		execoptionlist.append("8 32768")
 
-		gem5outdirlist.append(gem5outdir + "FFT/FFT_large/fft_large_inv")
+		gem5outdirlist.append(gem5outdir2 + "FFT/FFT_large/fft_large_inv")
 		execlist.append(eachpath + "/fft")
 		execoptionlist.append("8 32768 -i")
 	elif eachpath.endswith("stringsearch"):
-		gem5outdirlist.append(gem5outdir + "stringsearch/stringsearch_small")
+		gem5outdir2 = gem5outdir + "office/"
+		
+		gem5outdirlist.append(gem5outdir2 + "stringsearch/stringsearch_small")
 		execlist.append(eachpath + "/search_small")
 		execoptionlist.append("")
 
-		gem5outdirlist.append(gem5outdir + "stringsearch/stringsearch_large")
+		gem5outdirlist.append(gem5outdir2 + "stringsearch/stringsearch_large")
 		execlist.append(eachpath + "/search_large")
 		execoptionlist.append("")
 	elif eachpath.endswith("rijndael"):
-		gem5outdirlist.append(gem5outdir + "rijndael/rijndael_small/rijndael_small_enc")
+		gem5outdir2 = gem5outdir + "security/"
+		
+		gem5outdirlist.append(gem5outdir2 + "rijndael/rijndael_small/rijndael_small_enc")
 		execlist.append(eachpath + "/rijndael")
 		execoptionlist.append(eachpath + "/input_small.asc " + gem5outdirlist[-1] + "/output_small.enc e 1234567890abcdeffedcba09876543211234567890abcdeffedcba0987654321")
 
-		gem5outdirlist.append(gem5outdir + "rijndael/rijndael_small/rijndael_small_dec")
+		gem5outdirlist.append(gem5outdir2 + "rijndael/rijndael_small/rijndael_small_dec")
 		execlist.append(eachpath + "/rijndael")
 		execoptionlist.append(gem5outdirlist[-2] + "/output_small.enc " + gem5outdirlist[-1] + "/output_small.dec d 1234567890abcdeffedcba09876543211234567890abcdeffedcba0987654321")
 
-		gem5outdirlist.append(gem5outdir + "rijndael/rijndael_large/rijndael_large_enc")
+		gem5outdirlist.append(gem5outdir2 + "rijndael/rijndael_large/rijndael_large_enc")
 		execlist.append(eachpath + "/rijndael")
 		execoptionlist.append(eachpath + "/input_large.asc " + gem5outdirlist[-1] + "/output_large.enc e 1234567890abcdeffedcba09876543211234567890abcdeffedcba0987654321")
 
-		gem5outdirlist.append(gem5outdir + "rijndael/rijndael_large/rijndael_large_dec")
+		gem5outdirlist.append(gem5outdir2 + "rijndael/rijndael_large/rijndael_large_dec")
 		execlist.append(eachpath + "/rijndael")
 		execoptionlist.append(gem5outdirlist[-2] + "/output_large.enc " + gem5outdirlist[-1] + "/output_large.dec d 1234567890abcdeffedcba09876543211234567890abcdeffedcba0987654321")
 	elif eachpath.endswith("dijkstra"):
-		gem5outdirlist.append(gem5outdir + "dijkstra/dijkstra_small")
+		gem5outdir2 = gem5outdir + "network/"
+		
+		gem5outdirlist.append(gem5outdir2 + "dijkstra/dijkstra_small")
 		execlist.append(eachpath + "/dijkstra_small")
 		execoptionlist.append(eachpath + "/input.dat")
 
-		gem5outdirlist.append(gem5outdir + "dijkstra/dijkstra_large")
+		gem5outdirlist.append(gem5outdir2 + "dijkstra/dijkstra_large")
 		execlist.append(eachpath + "/dijkstra_large")
 		execoptionlist.append(eachpath + "/input.dat")
 	elif eachpath.endswith("bitcount"):
-		gem5outdirlist.append(gem5outdir + "bitcount/bitcnts_small")
+		gem5outdir2 = gem5outdir + "automotive/"
+		
+		gem5outdirlist.append(gem5outdir2 + "bitcount/bitcnts_small")
 		execlist.append(eachpath + "/bitcnts")
 		execoptionlist.append("75000")
 
-		gem5outdirlist.append(gem5outdir + "bitcount/bitcnts_large")
+		gem5outdirlist.append(gem5outdir2 + "bitcount/bitcnts_large")
 		execlist.append(eachpath + "/bitcnts")
 		execoptionlist.append("1125000")
 	elif eachpath.endswith("CRC32"):
+		gem5outdir2 = gem5outdir + "telecomm/"
+		
 		upperdir = eachpath.rsplit('/', 1)[0]
 
-		gem5outdirlist.append(gem5outdir + "CRC32/crc_small")
+		gem5outdirlist.append(gem5outdir2 + "CRC32/crc_small")
 		execlist.append(eachpath + "/crc")
 		execoptionlist.append(upperdir + "/adpcm/data/small.pcm")
 
-		gem5outdirlist.append(gem5outdir + "CRC32/crc_large")
+		gem5outdirlist.append(gem5outdir2 + "CRC32/crc_large")
 		execlist.append(eachpath + "/crc")
 		execoptionlist.append(upperdir + "/adpcm/data/large.pcm")
 	elif eachpath.endswith("susan"):
-		gem5outdirlist.append(gem5outdir + "susan/susan_small/susan_small_smoothing")
+		gem5outdir2 = gem5outdir + "automotive/"
+
+		gem5outdirlist.append(gem5outdir2 + "susan/susan_small/susan_small_smoothing")
 		execlist.append(eachpath + "/susan")
 		execoptionlist.append(eachpath + "/input_small.pgm " + gem5outdirlist[-1] + "/output_small.smoothing.pgm -s")
 
-		gem5outdirlist.append(gem5outdir + "susan/susan_small/susan_small_edges")
+		gem5outdirlist.append(gem5outdir2 + "susan/susan_small/susan_small_edges")
 		execlist.append(eachpath + "/susan")
 		execoptionlist.append(eachpath + "/input_small.pgm " + gem5outdirlist[-1] + "/output_small.edges.pgm -e")
 
-		gem5outdirlist.append(gem5outdir + "susan/susan_small/susan_small_corners")
+		gem5outdirlist.append(gem5outdir2 + "susan/susan_small/susan_small_corners")
 		execlist.append(eachpath + "/susan")
 		execoptionlist.append(eachpath + "/input_small.pgm " + gem5outdirlist[-1] + "/output_small.corners.pgm -c")
 
-		gem5outdirlist.append(gem5outdir + "susan/susan_large/susan_large_smoothing")
+		gem5outdirlist.append(gem5outdir2 + "susan/susan_large/susan_large_smoothing")
 		execlist.append(eachpath + "/susan")
 		execoptionlist.append(eachpath + "/input_large.pgm " + gem5outdirlist[-1] + "/output_large.smoothing.pgm -s")
 
-		gem5outdirlist.append(gem5outdir + "susan/susan_large/susan_large_edges")
+		gem5outdirlist.append(gem5outdir2 + "susan/susan_large/susan_large_edges")
 		execlist.append(eachpath + "/susan")
 		execoptionlist.append(eachpath + "/input_large.pgm " + gem5outdirlist[-1] + "/output_large.edges.pgm -e")
 
-		gem5outdirlist.append(gem5outdir + "susan/susan_large/susan_large_corners")
+		gem5outdirlist.append(gem5outdir2 + "susan/susan_large/susan_large_corners")
 		execlist.append(eachpath + "/susan")
 		execoptionlist.append(eachpath + "/input_large.pgm " + gem5outdirlist[-1] + "/output_large.corners.pgm -c")
 
 	elif eachpath.endswith("basicmath"):
-		gem5outdirlist.append(gem5outdir + "basicmath/basicmath_small")
+		gem5outdir2 = gem5outdir + "automotive/"
+		
+		gem5outdirlist.append(gem5outdir2 + "basicmath/basicmath_small")
 		execlist.append(eachpath + "/basicmath_small")
 		execoptionlist.append("")
 
-		gem5outdirlist.append(gem5outdir + "basicmath/basicmath_large")
+		gem5outdirlist.append(gem5outdir2 + "basicmath/basicmath_large")
 		execlist.append(eachpath + "/basicmath_large")
 		execoptionlist.append("")
 
 	# "< "leri duzelt
 	elif eachpath.endswith("src"):
+		gem5outdir2 = gem5outdir + "telecomm/"
+
 		upperdir = eachpath.rsplit('/', 1)[0]
 
-		gem5outdirlist.append(gem5outdir + "adpcm/adpcm_small/rawcaudio_small")
+		gem5outdirlist.append(gem5outdir2 + "adpcm/adpcm_small/rawcaudio_small")
 		execlist.append(eachpath + "/rawcaudio")
 		execoptionlist.append("< " + upperdir + "/data/small.pcm")
 
-		gem5outdirlist.append(gem5outdir + "adpcm/adpcm_small/rawdaudio_small")
+		gem5outdirlist.append(gem5outdir2 + "adpcm/adpcm_small/rawdaudio_small")
 		execlist.append(eachpath + "/rawdaudio")
 		execoptionlist.append("< " + upperdir + "/data/small.adpcm")
 
-		gem5outdirlist.append(gem5outdir + "adpcm/adpcm_large/rawcaudio_large")
+		gem5outdirlist.append(gem5outdir2 + "adpcm/adpcm_large/rawcaudio_large")
 		execlist.append(eachpath + "/rawcaudio")
 		execoptionlist.append("< " + upperdir + "/data/large.pcm")
 
-		gem5outdirlist.append(gem5outdir + "adpcm/adpcm_large/rawdaudio_large")
+		gem5outdirlist.append(gem5outdir2 + "adpcm/adpcm_large/rawdaudio_large")
 		execlist.append(eachpath + "/rawdaudio")
 		execoptionlist.append("< " + upperdir + "/data/large.adpcm")
 
 
-for i in range(0, len(gem5outdirlist) - 1):
+for i in range(0, len(gem5outdirlist)):
 	gem5outdir = gem5outdirlist[i]
 	execcmd = execlist[i]
 	if execoptionlist[i] != "":
 		execoptions = " --options='" + execoptionlist[i] + "' "
 	else: 
 		execoptions = ""
+
+	# adpcm benchmarki cok uzun suruyor inst sayisini baya azalttim ama dogru sonuc elde edilemeyebilir
+	if execcmd.endswith("rawcaudio") or execcmd.endswith("rawdaudio"):
+		otherconfoptions = " --maxinsts=100 "
+	else:
+		otherconfoptions = " --maxinsts=1000000 "
+
 	gem5cmd = gem5buildoptpath + " " + "--outdir=" + gem5outdir + gem5optoptions + " " + gem5configpath + " -c " + execcmd + execoptions + " " + gem5confoptions + otherconfoptions
 
 	print(gem5cmd)
@@ -336,14 +465,29 @@ for i in range(0, len(gem5outdirlist) - 1):
 	outFile.close()
 	#print(result)
 
+	#getmemtrace()
+#
+	#getstaticdis()
+#
+	#getstatichex()
+#
+	#getmemtracepercent(25) # %25
+#
+	#getmemtracepercent(50) # %50
+
 	try:
 		getmemtrace()
 
 		#decodeinstdatatraces()
 
+		getstaticdis()
+
 		getstatichex()
 
-		getstaticdis()
+		getmemtracepercent(25) # %25
+
+		getmemtracepercent(50) # %50
+		
 	except: 
 		pass
 

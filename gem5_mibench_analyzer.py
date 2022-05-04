@@ -322,7 +322,7 @@ for i in range(0, len(gem5outdirlist) - 1):
 		execoptions = " --options='" + execoptionlist[i] + "' "
 	else: 
 		execoptions = ""
-	gem5cmd = gem5buildoptpath + " " + "--outdir=" + gem5outdir + gem5optoptions + " " + gem5configpath + " -c " + execcmd + execoptions + " " + gem5confoptions + otherconfoptions + " > " + gem5outdir + "cmd_output.txt"
+	gem5cmd = gem5buildoptpath + " " + "--outdir=" + gem5outdir + gem5optoptions + " " + gem5configpath + " -c " + execcmd + execoptions + " " + gem5confoptions + otherconfoptions + " > " + gem5outdir + "/cmd_output.txt"
 
 	print(gem5cmd)
 	result = subprocess.getoutput(gem5cmd)

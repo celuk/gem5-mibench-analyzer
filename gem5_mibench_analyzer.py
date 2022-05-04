@@ -79,7 +79,7 @@ def getstatichex():
 	hexFile.close()
 
 # bu fonka yuzdelik random secimler eklenebilir ve onlar ayri memtrace.txtler olarak basilabilir.
-# su an %100 tum buyruklar icin Vler var
+# su an %100
 def getmemtrace():
 	traceFileName = gem5outdir + "/exectrace.txt"
 	traceFile = open(traceFileName, 'r')
@@ -321,12 +321,15 @@ for i in range(0, len(gem5outdirlist) - 1):
 	print(gem5cmd)
 	result = subprocess.getoutput(gem5cmd)
 	print(result)
-	getmemtrace()
+	try:
+		getmemtrace()
 
-	decodeinstdatatraces()
+		decodeinstdatatraces()
 
-	getstatichex()
+		getstatichex()
 
-	getstaticdis()
+		getstaticdis()
+	except: 
+		pass
 
 	print("")

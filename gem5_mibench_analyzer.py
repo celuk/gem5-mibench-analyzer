@@ -326,9 +326,10 @@ for i in range(0, len(gem5outdirlist) - 1):
 
 		decodeinstdatatraces()
 
-		getstatichex()
+		# statikleri kapatıyorum 10GBden fazla hex codeu mu olur :(
+		#getstatichex()
 
-		getstaticdis()
+		#getstaticdis()
 	except: 
 		pass
 

@@ -111,7 +111,7 @@ def getmemtrace():
 	memTraceFileName = gem5outdir + "/memtrace.txt"
 	memTraceFile = open(memTraceFileName, 'w')
 
-	memTraceFileNameSys = gem5outdir + "/memtrace_syscallsiz.txt"
+	memTraceFileNameSys = gem5outdir + "/memtrace_nosyscall.txt"
 	memTraceFileSys = open(memTraceFileNameSys, 'w')
 
 	for line in traceLines:
@@ -152,6 +152,51 @@ def getmemtrace():
 	memTraceFile.close()
 	memTraceFileSys.close()
 
+def getmemtracewithoutvalidation():
+	traceFileName = gem5outdir + "/exectrace.txt"
+	traceFile = open(traceFileName, 'r')
+	traceLines = traceFile.readlines()
+
+	prevInstCount = 0
+
+	lineCount = 0
+	eachLine = ""
+
+	memTraceFileName = gem5outdir + "/memtrace_novalid.txt"
+	memTraceFile = open(memTraceFileName, 'w')
+
+	memTraceFileNameSys = gem5outdir + "/memtrace_nosyscall_novalid.txt"
+	memTraceFileSys = open(memTraceFileNameSys, 'w')
+
+	for line in traceLines:
+		eachLine += line + ' '
+		lineCount += 1
+
+		if 'T0' in line:
+			if lineCount == 5:
+				opr = re.search('(?:[^:]*:){15} (.+?):', eachLine).group(1).rstrip().lstrip()
+			else:
+				opr = re.search('(?:[^:]*:){13} (.+?):', eachLine).group(1).rstrip().lstrip()
+			addr = eachLine.partition("A=")[2].rstrip().lstrip()
+
+			if opr == 'MemRead':
+				memTraceFile.write(prevInstCount.__str__() + ' ' + addr + ' R\n')
+				memTraceFileSys.write(prevInstCount.__str__() + ' ' + addr + ' R\n')
+				prevInstCount = 0
+			elif opr == 'MemWrite':
+				memTraceFile.write(prevInstCount.__str__() + ' ' + addr + ' W\n')
+				memTraceFileSys.write(prevInstCount.__str__() + ' ' + addr + ' W\n')
+				prevInstCount = 0
+			else:
+				prevInstCount = prevInstCount + 1
+
+			lineCount = 0
+			eachLine = ""
+
+	traceFile.close()
+	memTraceFile.close()
+	memTraceFileSys.close()
+
 def getmemtracepercent(percent):
 	traceFileName = gem5outdir + "/exectrace.txt"
 	traceFile = open(traceFileName, 'r')
@@ -165,12 +210,12 @@ def getmemtracepercent(percent):
 	memTraceFileName = gem5outdir + "/memtrace" + percent.__str__() + ".txt"
 	memTraceFile = open(memTraceFileName, 'w')
 
-	memTraceFileNameSys = gem5outdir + "/memtrace_syscallsiz" + percent.__str__() + ".txt"
+	memTraceFileNameSys = gem5outdir + "/memtrace_nosyscall" + percent.__str__() + ".txt"
 	memTraceFileSys = open(memTraceFileNameSys, 'w')
 
 	divider = 100.0/percent
 
-	instcount = subprocess.getoutput("wc -l < " + gem5outdir + "/memtrace_syscallsiz.txt") # burasi degistirilebilir ama satir sayisi az olana gore alalim, hata olmasin.
+	instcount = subprocess.getoutput("wc -l < " + gem5outdir + "/memtrace_nosyscall.txt") # burasi degistirilebilir ama satir sayisi az olana gore alalim, hata olmasin.
 	instcount = int(float(instcount))
 
 	numofrandnums = int(float(instcount/divider))
@@ -180,8 +225,6 @@ def getmemtracepercent(percent):
 	randlistindex = 0
 
 	contcount = 0 # surekli sayacak, randnumlistteki randnumlardan birine denk gelip gelmedigini kontrol icin, gelince index 1 artacak
-
-	isFirst = True # eger ilk yazilacak mem opu ise daha once mem opu olamayacağı icin previnstcount 0 olmali
 
 	for line in traceLines:
 		eachLine += line + ' '
@@ -199,28 +242,15 @@ def getmemtracepercent(percent):
 			pc = re.search('T0 : (.+?) @', eachLine).group(1).rstrip().lstrip()
 
 			if opr == 'MemRead':
-				if isFirst: 
-					prevInstCount = 0
-				isFirst = False
-
 				memTraceFile.write(prevInstCount.__str__() + ' ' + addr + ' R\n')
 				memTraceFileSys.write(prevInstCount.__str__() + ' ' + addr + ' R\n')
 				prevInstCount = 0
 			elif opr == 'MemWrite':
-				if isFirst: 
-					prevInstCount = 0
-				isFirst = False
-
 				memTraceFile.write(prevInstCount.__str__() + ' ' + addr + ' W\n')
 				memTraceFileSys.write(prevInstCount.__str__() + ' ' + addr + ' W\n')
 				prevInstCount = 0
 			
 			if contcount == randnumlist[randlistindex]:
-				if isFirst: 
-					prevInstCount = 0
-				isFirst = False
-				# burada sadece syscalsiz olanda ilk seferde syscall gelmisse isFirst sıkıntı olabilir, o da onemsiz sanki
-
 				# Vler arasi uzaklik | adres | veri | V
 				memTraceFile.write(prevInstCount.__str__() + ' ' + pc + ' ' + inst + ' V\n')
 				if opr != 'No_OpClass': # syscallari ele
@@ -465,17 +495,9 @@ for i in range(0, len(gem5outdirlist)):
 	outFile.close()
 	#print(result)
 
-	#getmemtrace()
-#
-	#getstaticdis()
-#
-	#getstatichex()
-#
-	#getmemtracepercent(25) # %25
-#
-	#getmemtracepercent(50) # %50
-
 	try:
+		getmemtracewithoutvalidation()
+
 		getmemtrace()
 
 		#decodeinstdatatraces()

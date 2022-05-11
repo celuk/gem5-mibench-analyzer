@@ -25,11 +25,15 @@ execcmd = execpath + exec
 execoptions = "" # " --options='/Users/shc/mibenchriscv/input_large.dat' " # exec pathin bi eksigi + large.dat
 gem5confoptions = "" #"--data-trace-file=datatrace.gz --inst-trace-file=insttrace.gz"
 
+maxinsts = 1000000
+
 # default cpu type cachesiz atomicsimplecpu
-otherconfoptions = " --maxinsts=1000000 " # " --maxinsts=1000000 --cpu-type=DerivO3CPU --bp-type=BiModeBP --mem-type=DDR4_2400_16x4 --mem-size=4GB --caches --l1i_size=4kB --l1i_assoc=8 --l1d_size=4kB --l1d_assoc=8 --l2cache --l2_size=128kB --l2_assoc=4 "
+# 32 kb ramulator l1 cache assoc 8
+# 256 kb ramulator l2 cache assoc 8
+memcacheconfs = " --cpu-type=DerivO3CPU --mem-type=DDR4_2400_8x8 --mem-size=4GB --caches --l1i_size=32kB --l1i_assoc=8 --l1d_size=32kB --l1d_assoc=8 --l2cache --l2_size=256kB --l2_assoc=8 "
+otherconfoptions = " --maxinsts=" + maxinsts.__str__() + " " # " --maxinsts=1000000 --cpu-type=DerivO3CPU --bp-type=BiModeBP --mem-type=DDR4_2400_16x4 --mem-size=4GB --caches --l1i_size=4kB --l1i_assoc=8 --l1d_size=4kB --l1d_assoc=8 --l2cache --l2_size=128kB --l2_assoc=4 "
 
-gem5cmd = gem5buildoptpath + " " + "--outdir=" + gem5outdir + exec + gem5optoptions + " " + gem5configpath + " -c " + execcmd + execoptions + " " + gem5confoptions + otherconfoptions
-
+gem5cmd = gem5buildoptpath + " " + "--outdir=" + gem5outdir + exec + gem5optoptions + " " + gem5configpath + " -c " + execcmd + execoptions + " " + gem5confoptions + memcacheconfs + otherconfoptions
 
 
 # riscv64-unknown-elf-objcopy -O binary dene.elf dene.bin
@@ -95,8 +99,9 @@ def getstatichex():
 	f.close()
 	hexFile.close()
 
-# bu fonka yuzdelik random secimler eklenebilir ve onlar ayri memtrace.txtler olarak basilabilir.
-# su an %100
+
+rwopcount = 0
+
 def getmemtrace():
 	traceFileName = gem5outdir + "/exectrace.txt"
 	traceFile = open(traceFileName, 'r')
@@ -113,6 +118,9 @@ def getmemtrace():
 
 	memTraceFileNameSys = gem5outdir + "/memtrace_nosyscall.txt"
 	memTraceFileSys = open(memTraceFileNameSys, 'w')
+
+	global rwopcount
+	rwopcount = 0
 
 	for line in traceLines:
 		eachLine += line + ' '
@@ -131,10 +139,12 @@ def getmemtrace():
 				memTraceFile.write(prevInstCount.__str__() + ' ' + addr + ' R\n')
 				memTraceFileSys.write(prevInstCount.__str__() + ' ' + addr + ' R\n')
 				prevInstCount = 0
+				rwopcount += 1
 			elif opr == 'MemWrite':
 				memTraceFile.write(prevInstCount.__str__() + ' ' + addr + ' W\n')
 				memTraceFileSys.write(prevInstCount.__str__() + ' ' + addr + ' W\n')
 				prevInstCount = 0
+				rwopcount += 1
 			#else:
 			#	prevInstCount = prevInstCount + 1
 
@@ -168,25 +178,32 @@ def getmemtracewithoutvalidation():
 	memTraceFileNameSys = gem5outdir + "/memtrace_nosyscall_novalid.txt"
 	memTraceFileSys = open(memTraceFileNameSys, 'w')
 
-	for line in traceLines:
-		eachLine += line + ' '
-		lineCount += 1
+	global rwopcount
+	rwopcount = 0
 
-		if 'T0' in line:
-			if lineCount == 5:
-				opr = re.search('(?:[^:]*:){15} (.+?):', eachLine).group(1).rstrip().lstrip()
-			else:
-				opr = re.search('(?:[^:]*:){13} (.+?):', eachLine).group(1).rstrip().lstrip()
+	for eachLine in traceLines:
+		#eachLine += line + ' '
+		#lineCount += 1
+
+		if 'T0' in eachLine: #line:
+			#if lineCount == 5:
+			#	opr = re.search('(?:[^:]*:){15} (.+?):', eachLine).group(1).rstrip().lstrip()
+			#else:
+			#	opr = re.search('(?:[^:]*:){13} (.+?):', eachLine).group(1).rstrip().lstrip()
+
+			opr = re.search('(?:[^:]*:){5} (.+?):', eachLine).group(1).rstrip().lstrip()
 			addr = eachLine.partition("A=")[2].rstrip().lstrip()
 
 			if opr == 'MemRead':
 				memTraceFile.write(prevInstCount.__str__() + ' ' + addr + ' R\n')
 				memTraceFileSys.write(prevInstCount.__str__() + ' ' + addr + ' R\n')
 				prevInstCount = 0
+				rwopcount += 1
 			elif opr == 'MemWrite':
 				memTraceFile.write(prevInstCount.__str__() + ' ' + addr + ' W\n')
 				memTraceFileSys.write(prevInstCount.__str__() + ' ' + addr + ' W\n')
 				prevInstCount = 0
+				rwopcount += 1
 			else:
 				prevInstCount = prevInstCount + 1
 
@@ -478,11 +495,14 @@ for i in range(0, len(gem5outdirlist)):
 
 	# adpcm benchmarki cok uzun suruyor inst sayisini baya azalttim ama dogru sonuc elde edilemeyebilir
 	if execcmd.endswith("rawcaudio") or execcmd.endswith("rawdaudio"):
-		otherconfoptions = " --maxinsts=100 "
+		maxinsts = 100
 	else:
-		otherconfoptions = " --maxinsts=1000000 "
+		maxinsts = 1000000
+	
+	otherconfoptions = " --maxinsts=" + maxinsts.__str__() + " "
 
-	gem5cmd = gem5buildoptpath + " " + "--outdir=" + gem5outdir + gem5optoptions + " " + gem5configpath + " -c " + execcmd + execoptions + " " + gem5confoptions + otherconfoptions
+
+	gem5cmd = gem5buildoptpath + " " + "--outdir=" + gem5outdir + gem5optoptions + " " + gem5configpath + " -c " + execcmd + execoptions + " " + gem5confoptions + memcacheconfs + otherconfoptions
 
 	print(gem5cmd)
 
@@ -495,22 +515,29 @@ for i in range(0, len(gem5outdirlist)):
 	outFile.close()
 	#print(result)
 
+	
 	try:
 		getmemtracewithoutvalidation()
 
-		getmemtrace()
+		#getmemtrace()
+
+		mpki = rwopcount / (maxinsts / 1000.0)
+
+		print("\nMPKI: " + mpki.__str__() + "\n")
 
 		#decodeinstdatatraces()
 
-		getstaticdis()
+		#getstaticdis()
 
-		getstatichex()
+		#getstatichex()
 
-		getmemtracepercent(25) # %25
+		#getmemtracepercent(25) # %25
 
-		getmemtracepercent(50) # %50
+		#getmemtracepercent(50) # %50
+
+		#getmemtracepercent(10)
 		
 	except: 
 		pass
-
+	
 	print("\n")

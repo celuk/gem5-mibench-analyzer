@@ -25,7 +25,8 @@ execcmd = execpath + exec
 execoptions = "" # " --options='/Users/shc/mibenchriscv/input_large.dat' " # exec pathin bi eksigi + large.dat
 gem5confoptions = "" #"--data-trace-file=datatrace.gz --inst-trace-file=insttrace.gz"
 
-maxinsts = 1000000
+maxi = 1000000
+maxinsts = maxi #1000000
 
 # default cpu type cachesiz atomicsimplecpu
 # 32 kb ramulator l1 cache assoc 8
@@ -127,13 +128,19 @@ def getmemtrace():
 		lineCount += 1
 
 		if 'T0' in line:
-			if lineCount == 5:
-				opr = re.search('(?:[^:]*:){15} (.+?):', eachLine).group(1).rstrip().lstrip()
-			else:
-				opr = re.search('(?:[^:]*:){13} (.+?):', eachLine).group(1).rstrip().lstrip()
+			#if lineCount == 5:
+			#	opr = re.search('(?:[^:]*:){15} (.+?):', eachLine).group(1).rstrip().lstrip()
+			#else:
+			#	opr = re.search('(?:[^:]*:){13} (.+?):', eachLine).group(1).rstrip().lstrip()
+			splittedline = line.split("T0 ",1)
+			linebefore = splittedline[0]
+			lineafter = "T0 " + splittedline[1]
+			opr = re.search('(?:[^:]*:){3} (.+?):', lineafter).group(1).rstrip().lstrip()
+
 			addr = eachLine.partition("A=")[2].rstrip().lstrip()
-			inst = re.search('Decoding instruction (.*) at', eachLine).group(1).rstrip().lstrip()
-			pc = re.search('T0 : (.+?) @', eachLine).group(1).rstrip().lstrip()
+
+			inst = re.search('Decoding instruction (.*) at', linebefore).group(1).rstrip().lstrip()
+			pc = re.search('T0 : (.+?) @', lineafter).group(1).rstrip().lstrip()
 
 			if opr == 'MemRead':
 				memTraceFile.write(prevInstCount.__str__() + ' ' + addr + ' R\n')
@@ -169,7 +176,7 @@ def getmemtracewithoutvalidation():
 
 	prevInstCount = 0
 
-	lineCount = 0
+	#lineCount = 0
 	eachLine = ""
 
 	memTraceFileName = gem5outdir + "/memtrace_novalid.txt"
@@ -207,7 +214,7 @@ def getmemtracewithoutvalidation():
 			else:
 				prevInstCount = prevInstCount + 1
 
-			lineCount = 0
+			#lineCount = 0
 			eachLine = ""
 
 	traceFile.close()
@@ -250,13 +257,23 @@ def getmemtracepercent(percent):
 		if 'T0' in line:
 			contcount += 1
 
-			if lineCount == 5:
-				opr = re.search('(?:[^:]*:){15} (.+?):', eachLine).group(1).rstrip().lstrip()
-			else:
-				opr = re.search('(?:[^:]*:){13} (.+?):', eachLine).group(1).rstrip().lstrip()
+			#if lineCount == 5:
+			#	opr = re.search('(?:[^:]*:){15} (.+?):', eachLine).group(1).rstrip().lstrip()
+			#else:
+			#	opr = re.search('(?:[^:]*:){13} (.+?):', eachLine).group(1).rstrip().lstrip()
+			#addr = eachLine.partition("A=")[2].rstrip().lstrip()
+			#inst = re.search('Decoding instruction (.*) at', eachLine).group(1).rstrip().lstrip()
+			#pc = re.search('T0 : (.+?) @', eachLine).group(1).rstrip().lstrip()
+
+			splittedline = line.split("T0 ",1)
+			linebefore = splittedline[0]
+			lineafter = "T0 " + splittedline[1]
+			opr = re.search('(?:[^:]*:){3} (.+?):', lineafter).group(1).rstrip().lstrip()
+
 			addr = eachLine.partition("A=")[2].rstrip().lstrip()
-			inst = re.search('Decoding instruction (.*) at', eachLine).group(1).rstrip().lstrip()
-			pc = re.search('T0 : (.+?) @', eachLine).group(1).rstrip().lstrip()
+
+			inst = re.search('Decoding instruction (.*) at', linebefore).group(1).rstrip().lstrip()
+			pc = re.search('T0 : (.+?) @', lineafter).group(1).rstrip().lstrip()
 
 			if opr == 'MemRead':
 				memTraceFile.write(prevInstCount.__str__() + ' ' + addr + ' R\n')
@@ -497,7 +514,7 @@ for i in range(0, len(gem5outdirlist)):
 	if execcmd.endswith("rawcaudio") or execcmd.endswith("rawdaudio"):
 		maxinsts = 100
 	else:
-		maxinsts = 1000000
+		maxinsts = maxi #1000000
 	
 	otherconfoptions = " --maxinsts=" + maxinsts.__str__() + " "
 
